@@ -19,13 +19,39 @@ services:
       - ALLOW_PLAINTEXT_LISTENER=yes
     depends_on:
       - zookeeper
-  service-users:
+  services-billing:
     image: mhart/alpine-node:12.16.2
-    command: sh -c "node /app/index.js"
+    command: sh -c "node /app/billing.js"
     volumes:
-      - ./services/users:/app
+      - ./services:/app 
+  services-notifications:
+    image: mhart/alpine-node:12.16.2
+    command: sh -c "node /app/notifications.js"
+    volumes:
+      - ./services:/app 
+  services-orders:
+    image: mhart/alpine-node:12.16.2
+    command: sh -c "node /app/orders.js"
+    volumes:
+      - ./services:/app
+  services-users:
+    image: mhart/alpine-node:12.16.2
+    command: sh -c "node /app/users.js"
+    volumes:
+      - ./services:/app 
+  nginx:
+    image: openresty/openresty:xenial
+    command: sh -c "sleep 10 && nginx -g \"daemon off;\""
     ports:
-      - 8080:8080  
+      - "127.0.0.1:${NGINX_EXTERNAL_PORT:-8990}:80"
+    depends_on:
+      - services-billing
+      - services-notifications
+      - services-orders
+      - services-users
+    volumes:
+      - ./default.conf:/usr/local/openresty/nginx/conf/conf.d/default.conf
+      - ./nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf  
 volumes:
   zookeeper_data:
     driver: local

@@ -11,5 +11,9 @@
   "dependencies": {
     "crypto": "^1.0.1",
     "kafkajs": "^1.15.0"
+  },
+  "devDependencies": {
+    "express": "^4.17.1",
+    "expressjs": "^1.0.1"
   }
 }
