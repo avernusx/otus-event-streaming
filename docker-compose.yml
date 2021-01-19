@@ -4,18 +4,17 @@ services:
     image: 'docker.io/bitnami/zookeeper:3-debian-10'
     ports:
       - '2181:2181'
-    volumes:
-      - 'zookeeper_data:/bitnami'
     environment:
       - ALLOW_ANONYMOUS_LOGIN=yes
   kafka:
     image: 'docker.io/bitnami/kafka:2-debian-10'
     ports:
       - '9092:9092'
-    volumes:
-      - 'kafka_data:/bitnami'
     environment:
-      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_BROKER_ID=1
+      - KAFKA_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
       - ALLOW_PLAINTEXT_LISTENER=yes
     depends_on:
       - zookeeper
@@ -24,21 +23,45 @@ services:
     command: sh -c "node /app/billing.js"
     volumes:
       - ./services:/app 
+    depends_on:
+      - kafka  
+    environment: 
+      - KAFKA
+      - LOGLEVEL
+      - READ_TIMEOUT
   services-notifications:
     image: mhart/alpine-node:12.16.2
     command: sh -c "node /app/notifications.js"
     volumes:
       - ./services:/app 
+    depends_on:
+      - kafka   
+    environment: 
+      - KAFKA
+      - LOGLEVEL
+      - READ_TIMEOUT 
   services-orders:
     image: mhart/alpine-node:12.16.2
     command: sh -c "node /app/orders.js"
     volumes:
       - ./services:/app
+    depends_on:
+      - kafka    
+    environment: 
+      - KAFKA
+      - LOGLEVEL
+      - READ_TIMEOUT 
   services-users:
     image: mhart/alpine-node:12.16.2
     command: sh -c "node /app/users.js"
     volumes:
       - ./services:/app 
+    depends_on:
+      - kafka   
+    environment: 
+      - KAFKA
+      - LOGLEVEL
+      - READ_TIMEOUT 
   nginx:
     image: openresty/openresty:xenial
     command: sh -c "sleep 10 && nginx -g \"daemon off;\""
@@ -52,9 +75,4 @@ services:
     volumes:
       - ./default.conf:/usr/local/openresty/nginx/conf/conf.d/default.conf
       - ./nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf  
-volumes:
-  zookeeper_data:
-    driver: local
-  kafka_data:
-    driver: local
       

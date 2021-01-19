@@ -3,33 +3,49 @@ const { read, send }= require('./kafka.js')
 const express = require('express')
 const { Kafka } = require('kafkajs')
 
+const bodyParser = require('body-parser')
+
 let orders = []
 
 const kafka = new Kafka({
   clientId: 'orders',
-  brokers: ['kafka:9092'],
-  logLevel: 2
+  brokers: [process.env.KAFKA],
+  logLevel: process.env.LOGLEVEL
 })
 
-setInterval(async () => {
-  await read(kafka, 'order-group', 'success_payment', async (event) => {
-    console.log('ORDERS: Order was paid for succesfully')
-    const data = JSON.parse(event.message.value)
-    const order = orders.find(order => order.id == data.order_id)
-    order.status = 'paid'
-  })
-}, 1000)
+const successPayment = async (event) => {
+  const data = JSON.parse(event.message.value)
+  console.log('ORDERS: Order was paid for succesfully', data)
+  const order = orders.find(order => order.id == data.order_id)
+  order.status = 'paid'
+}
 
-setInterval(async () => {
-  await read(kafka, 'order-group', 'failed_payment', async (event) => {
-    console.log('ORDERS: Failed to pay for order')
-    const data = JSON.parse(event.message.value)
-    const order = orders.find(order => order.id == data.order_id)
-    orders.status = 'failed'
-  })
-}, 1000)
+const failedPayment = async (event) => {
+  const data = JSON.parse(event.message.value)
+  console.log('ORDERS: Failed to pay for order', data)
+  const order = orders.find(order => order.id == data.order_id)
+  order.status = 'failed'
+}
+
+const listenToKafka = async () => {
+  const consumer = kafka.consumer({ groupId: 'orders-group' })
+  await consumer.connect()
+  await consumer.subscribe({ topic: 'success_payment', fromBeginning: false })
+  await consumer.subscribe({ topic: 'failed_payment', fromBeginning: false })
+  setInterval(async () => {
+    await consumer.run({ 
+      eachMessage: (event) => {
+        console.log("ORDERS: Receive message " + event.topic)
+        if (event.topic == 'success_payment') successPayment(event)
+        if (event.topic == 'failed_payment') failedPayment(event)
+      } 
+    })
+  }, process.env.READ_TIMEOUT)
+}
 
 app = express()
+app.use(bodyParser.json())
+app.use(bodyParser.urlencoded({ extended: true }))
 
 const host = '0.0.0.0'
 const port = 8080
@@ -39,7 +55,7 @@ app.get('/orders', (req, res) => {
 })
 
 app.post('/orders', async (req, res) => {
-  const data = JSON.parse(req.data)
+  const data = req.body
   const order = {
     id: data.id,
     account_id: data.account_id,
@@ -64,3 +80,4 @@ app.get('/order/:id', (req, res) => {
 })
 
 app.listen(port, host, () => console.log(`Server listens http://${host}:${port}`))
+listenToKafka()
